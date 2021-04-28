@@ -1,5 +1,5 @@
-const CACHE_NAME = 'static-cache-v2';
-const DATA_CACHE_NAME = 'data-cache-v1';
+const CACHE_NAME = "static-cache-v2";
+const DATA_CACHE_NAME = "data-cache-v1";
 
 const FILES_TO_CACHE = [
   "/",
@@ -11,12 +11,12 @@ const FILES_TO_CACHE = [
   "/manifest.webmanifest",
   "db.js",
   "https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css",
-  "https://cdn.jsdelivr.net/npm/chart.js@2.8.0"
+  "https://cdn.jsdelivr.net/npm/chart.js@2.8.0",
 ];
 
 self.addEventListener("install", function (evt) {
   evt.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
+    caches.open(CACHE_NAME).then((cache) => {
       console.log("Your files were pre-cached successfully!");
       return cache.addAll(FILES_TO_CACHE);
     })
@@ -27,9 +27,9 @@ self.addEventListener("install", function (evt) {
 
 self.addEventListener("activate", function (evt) {
   evt.waitUntil(
-    caches.keys().then(keyList => {
+    caches.keys().then((keyList) => {
       return Promise.all(
-        keyList.map(key => {
+        keyList.map((key) => {
           if (key !== CACHE_NAME && key !== DATA_CACHE_NAME) {
             console.log("Removing old cache data", key);
             return caches.delete(key);
@@ -42,30 +42,42 @@ self.addEventListener("activate", function (evt) {
   self.clients.claim();
 });
 
-self.addEventListener('fetch', function (evt) {
-  if (evt.request.url.includes('/api/')) {
-    console.log('[Service Worker] Fetch (data)', evt.request.url);
+self.addEventListener("fetch", function (evt) {
+  if (evt.request.url.includes("/api/")) {
     evt.respondWith(
-      caches.open(DATA_CACHE_NAME).then(cache => {
-        return fetch(evt.request)
-          .then(response => {
-            if (response.status === 200) {
-              cache.put(evt.request.url, response.clone());
-            }
-            return response;
-          })
-          .catch(err => {
-            return cache.match(evt.request);
-          });
-      }).catch(err => console.log(err))
+      caches
+        .open(DATA_CACHE_NAME)
+        .then((cache) => {
+          return fetch(evt.request)
+            .then((response) => {
+              // If the response was good, clone it and store it in the cache.
+              if (response.status === 200) {
+                cache.put(evt.request.url, response.clone());
+              }
+
+              return response;
+            })
+            .catch((err) => {
+              // Network request failed, try to get it from the cache.
+              return cache.match(evt.request);
+            });
+        })
+        .catch((err) => console.log(err))
     );
-  } else {
-    evt.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(evt.request).then(response => {
-          return response || fetch(evt.request);
-        });
-      })
-    );
+
+    return;
   }
+
+  evt.respondWith(
+    fetch(evt.request).catch(function () {
+      return caches.match(evt.request).then(function (response) {
+        if (response) {
+          return response;
+        } else if (evt.request.headers.get("accept").includes("text/html")) {
+          // return the cached home page for all requests for html pages
+          return caches.match("/");
+        }
+      });
+    })
+  );
 });
